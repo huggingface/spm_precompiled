@@ -7,7 +7,7 @@
 //!
 //! The core of the algorithm is to read spm's binary `precompiled_charsmap`.
 use nom::{number::complete::le_u32, IResult, ToUsize};
-use serde::{Deserialize, Serialize};
+use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 use std::convert::TryFrom;
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -25,6 +25,7 @@ use unicode_segmentation::UnicodeSegmentation;
 #[derive(Default, Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", try_from = "PrecompiledDeserializer")]
 pub struct Precompiled {
+    #[serde(serialize_with = "as_base64", deserialize_with = "from_base64")]
     precompiled_charsmap: Vec<u8>,
     #[serde(skip)]
     normalized: String,
@@ -36,7 +37,25 @@ pub struct Precompiled {
 #[derive(Deserialize)]
 #[serde(tag = "type")]
 struct PrecompiledDeserializer {
+    #[serde(deserialize_with = "from_base64")]
     precompiled_charsmap: Vec<u8>,
+}
+
+fn as_base64<T, S>(key: &T, serializer: S) -> Result<S::Ok, S::Error>
+where
+    T: AsRef<[u8]>,
+    S: Serializer,
+{
+    serializer.serialize_str(&base64::encode(key.as_ref()))
+}
+
+fn from_base64<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s: &str = Deserialize::deserialize(deserializer)?;
+    let precompiled_charsmap = base64::decode(s).map_err(|err| Error::custom(err.to_string()))?;
+    Ok(precompiled_charsmap)
 }
 
 impl TryFrom<PrecompiledDeserializer> for Precompiled {

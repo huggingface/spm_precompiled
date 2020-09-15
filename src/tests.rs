@@ -5,6 +5,7 @@ fn test_serialization() {
     let precompiled = Precompiled::from(&nmt_nfkc()).unwrap();
 
     let string = &serde_json::to_string(&precompiled).unwrap();
+    println!("String {:?}", string.len());
     let reconstructed: Precompiled = serde_json::from_str(string).unwrap();
 
     assert_eq!(reconstructed, precompiled)
