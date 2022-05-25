@@ -21,7 +21,7 @@ This crate is highly specialized and not intended for general use.
 serde = { version = "1.0", features = [ "derive" ] }
 nom = "6.2.1"
 unicode-segmentation = "1.6"
-base64 = "0.12"
+base64 = "0.13"
 
 [dev-dependencies]
 serde_json = "1.0"
