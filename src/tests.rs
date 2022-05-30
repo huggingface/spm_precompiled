@@ -3,9 +3,7 @@ use super::*;
 #[test]
 fn test_load_precompiled_map() {
     let precompiled = Precompiled::from(&nmt_nfkc()).unwrap();
-    let results = precompiled
-        .trie
-        .common_prefix_search(&"\u{fb01}".as_bytes());
+    let results = precompiled.trie.common_prefix_search("\u{fb01}".as_bytes());
     assert_eq!(results, vec![2130]);
     // Check the null termination
     assert_eq!(&precompiled.normalized[2130..2133], "fi\0");
@@ -13,13 +11,13 @@ fn test_load_precompiled_map() {
     let results = precompiled.trie.common_prefix_search(b" ");
     assert!(results.is_empty());
 
-    let results = precompiled.trie.common_prefix_search(&"𝔾".as_bytes());
+    let results = precompiled.trie.common_prefix_search("𝔾".as_bytes());
     assert_eq!(results, vec![1786]);
     assert_eq!(&precompiled.normalized[1786..1788], "G\0");
 
-    assert_eq!(precompiled.transform(&"𝔾"), Some("G"));
-    assert_eq!(precompiled.transform(&"𝕠"), Some("o"));
-    assert_eq!(precompiled.transform(&"\u{200d}"), Some(" "));
+    assert_eq!(precompiled.transform("𝔾"), Some("G"));
+    assert_eq!(precompiled.transform("𝕠"), Some("o"));
+    assert_eq!(precompiled.transform("\u{200d}"), Some(" "));
 }
 
 #[test]
