@@ -160,7 +160,7 @@ impl std::error::Error for PrecompiledError {}
 impl Precompiled {
     pub fn from(precompiled_charsmap: &[u8]) -> Result<Precompiled, PrecompiledError> {
         let (normalized_blob, trie_blob) =
-            parse(&precompiled_charsmap).map_err(|_| PrecompiledError::ParseError)?;
+            parse(precompiled_charsmap).map_err(|_| PrecompiledError::ParseError)?;
         let normalized = String::from_utf8(normalized_blob.to_vec())
             .map_err(|_| PrecompiledError::NormalizedInvalidUtf8)?;
         let trie = DoubleArray::from(trie_blob);
@@ -173,14 +173,14 @@ impl Precompiled {
     }
 
     pub fn transform(&self, chunk: &str) -> Option<&str> {
-        let results = self.trie.common_prefix_search(&chunk.as_bytes());
+        let results = self.trie.common_prefix_search(chunk.as_bytes());
         if results.is_empty() {
             None
         } else {
             let index = results[0] as usize;
             let mut index2 = index;
             while index2 < self.normalized.len() {
-                if self.normalized.bytes().nth(index2)? == 0u8 {
+                if *self.normalized.as_bytes().get(index2)? == 0u8 {
                     break;
                 }
                 index2 += 1;
