@@ -4,7 +4,7 @@ use std::io::Read;
 
 #[test]
 fn test_load_precompiled_map() {
-    let precompiled = Precompiled::from(&nmt_nfkc()).unwrap();
+    let precompiled = Precompiled::from(nmt_nfkc().as_deref()).unwrap();
     let results = precompiled.trie.common_prefix_search("\u{fb01}".as_bytes());
     assert_eq!(results, vec![2130]);
     // Check the null termination
@@ -24,7 +24,7 @@ fn test_load_precompiled_map() {
 
 #[test]
 fn test_precompiled_failure_mode() {
-    let precompiled = Precompiled::from(&nmt_nfkc()).unwrap();
+    let precompiled = Precompiled::from(nmt_nfkc().as_deref()).unwrap();
     let original = "เขาไม่ได้พูดสักคำ".to_string();
     let normalized = "เขาไม\u{e48}ได\u{e49}พ\u{e39}ดส\u{e31}กค\u{e4d}า".to_string();
     assert_eq!(precompiled.normalize_string(&original), normalized);
@@ -32,7 +32,7 @@ fn test_precompiled_failure_mode() {
 
 #[test]
 fn test_precompiled_hindi() {
-    let precompiled = Precompiled::from(&nmt_nfkc()).unwrap();
+    let precompiled = Precompiled::from(nmt_nfkc().as_deref()).unwrap();
     let original = "ड़ी दुख".to_string();
     let normalized = "ड\u{93c}ी द\u{941}ख".to_string();
     assert_eq!(precompiled.normalize_string(&original), normalized);
@@ -40,7 +40,7 @@ fn test_precompiled_hindi() {
 
 #[test]
 fn test_precompiled_multi_char_replace_bug() {
-    let precompiled = Precompiled::from(&nmt_nfkc()).unwrap();
+    let precompiled = Precompiled::from(nmt_nfkc().as_deref()).unwrap();
     // آپ
     let original_bytes = vec![0xd8, 0xa7, 0xd9, 0x93];
     let results = precompiled.trie.common_prefix_search(&original_bytes);
@@ -55,7 +55,7 @@ fn test_precompiled_multi_char_replace_bug() {
 
 #[test]
 fn test_serialization() {
-    let precompiled = Precompiled::from(&nmt_nfkc()).unwrap();
+    let precompiled = Precompiled::from(nmt_nfkc().as_deref()).unwrap();
 
     let string = &serde_json::to_string(&precompiled).unwrap();
     let reconstructed: Precompiled = serde_json::from_str(string).unwrap();
@@ -69,10 +69,23 @@ fn test_serialization() {
     let _reconstructed2: Precompiled = serde_json::from_str(&string).unwrap();
 }
 
-fn nmt_nfkc() -> Vec<u8> {
+#[test]
+fn test_null_serialization() {
+    let precompiled = Precompiled::default();
+
+    let string = &serde_json::to_string(&precompiled).unwrap();
+    let reconstructed: Precompiled = serde_json::from_str(string).unwrap();
+    assert_eq!(
+        string,
+        "{\"type\":\"Precompiled\",\"precompiled_charsmap\":null}"
+    );
+    assert_eq!(reconstructed, precompiled);
+}
+
+fn nmt_nfkc() -> Option<Vec<u8>> {
     let mut buffer = Vec::new();
     let mut file = File::open("nmt_nfkc.bin").unwrap();
     file.read_to_end(&mut buffer).unwrap();
 
-    buffer
+    Some(buffer)
 }

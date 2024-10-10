@@ -26,7 +26,7 @@ use unicode_segmentation::UnicodeSegmentation;
 #[serde(tag = "type", try_from = "PrecompiledDeserializer")]
 pub struct Precompiled {
     #[serde(serialize_with = "as_base64", deserialize_with = "from_base64")]
-    precompiled_charsmap: Vec<u8>,
+    precompiled_charsmap: Option<Vec<u8>>,
     #[serde(skip)]
     normalized: String,
     #[serde(skip)]
@@ -38,31 +38,40 @@ pub struct Precompiled {
 #[serde(tag = "type")]
 struct PrecompiledDeserializer {
     #[serde(deserialize_with = "from_base64")]
-    precompiled_charsmap: Vec<u8>,
+    precompiled_charsmap: Option<Vec<u8>>,
 }
 
-fn as_base64<T, S>(key: &T, serializer: S) -> Result<S::Ok, S::Error>
+fn as_base64<T, S>(key: &Option<T>, serializer: S) -> Result<S::Ok, S::Error>
 where
     T: AsRef<[u8]>,
     S: Serializer,
 {
-    serializer.serialize_str(&base64::encode(key.as_ref()))
+    match key {
+        Some(k) => serializer.serialize_str(&base64::encode(k.as_ref())),
+        None => serializer.serialize_none(),
+    }
 }
 
-fn from_base64<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
+fn from_base64<'de, D>(deserializer: D) -> Result<Option<Vec<u8>>, D::Error>
 where
     D: Deserializer<'de>,
 {
-    let s: &str = Deserialize::deserialize(deserializer)?;
-    let precompiled_charsmap = base64::decode(s).map_err(|err| Error::custom(err.to_string()))?;
-    Ok(precompiled_charsmap)
+    let opt_s: Option<&str> = Option::deserialize(deserializer)?;
+    match opt_s {
+        Some(s) => {
+            let precompiled_charsmap =
+                base64::decode(s).map_err(|err| Error::custom(err.to_string()))?;
+            Ok(Some(precompiled_charsmap))
+        }
+        None => Ok(None), // Handle the null case
+    }
 }
 
 impl TryFrom<PrecompiledDeserializer> for Precompiled {
     type Error = PrecompiledError;
 
     fn try_from(t: PrecompiledDeserializer) -> Result<Self, Self::Error> {
-        Self::from(&t.precompiled_charsmap)
+        Self::from(t.precompiled_charsmap.as_deref())
     }
 }
 
@@ -158,16 +167,21 @@ impl std::fmt::Display for PrecompiledError {
 impl std::error::Error for PrecompiledError {}
 
 impl Precompiled {
-    pub fn from(precompiled_charsmap: &[u8]) -> Result<Precompiled, PrecompiledError> {
-        let (normalized_blob, trie_blob) =
-            parse(precompiled_charsmap).map_err(|_| PrecompiledError::ParseError)?;
-        let normalized = String::from_utf8(normalized_blob.to_vec())
-            .map_err(|_| PrecompiledError::NormalizedInvalidUtf8)?;
-        let trie = DoubleArray::from(trie_blob);
-        let precompiled = Precompiled {
-            precompiled_charsmap: precompiled_charsmap.to_vec(),
-            normalized,
-            trie,
+    pub fn from(precompiled_charsmap: Option<&[u8]>) -> Result<Precompiled, PrecompiledError> {
+        let precompiled = match precompiled_charsmap {
+            Some(charsmap) => {
+                let (normalized_blob, trie_blob) =
+                    parse(charsmap).map_err(|_| PrecompiledError::ParseError)?;
+                let normalized = String::from_utf8(normalized_blob.to_vec())
+                    .map_err(|_| PrecompiledError::NormalizedInvalidUtf8)?;
+                let trie = DoubleArray::from(trie_blob);
+                Precompiled {
+                    precompiled_charsmap: Some(charsmap.to_vec()),
+                    normalized,
+                    trie,
+                }
+            }
+            None => Precompiled::default(),
         };
         Ok(precompiled)
     }
