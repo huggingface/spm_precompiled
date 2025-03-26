@@ -18,10 +18,10 @@ This crate is highly specialized and not intended for general use.
 
 
 [dependencies]
+base64 = "0.22"
 serde = { version = "1.0", features = [ "derive" ] }
 nom = "7.1.1"
 unicode-segmentation = "1.9"
-base64 = "0.13"
 
 [dev-dependencies]
 serde_json = "1.0"
