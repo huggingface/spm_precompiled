@@ -6,6 +6,8 @@
 //! This crate is highly specialized and not intended for general use.
 //!
 //! The core of the algorithm is to read spm's binary `precompiled_charsmap`.
+use base64::prelude::BASE64_STANDARD;
+use base64::Engine as _;
 use nom::{number::complete::le_u32, IResult, ToUsize};
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 use std::convert::TryFrom;
@@ -46,7 +48,7 @@ where
     T: AsRef<[u8]>,
     S: Serializer,
 {
-    serializer.serialize_str(&base64::encode(key.as_ref()))
+    serializer.serialize_str(&BASE64_STANDARD.encode(key.as_ref()))
 }
 
 fn from_base64<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
@@ -54,8 +56,9 @@ where
     D: Deserializer<'de>,
 {
     let s: &str = Deserialize::deserialize(deserializer)?;
-    let precompiled_charsmap = base64::decode(s).map_err(|err| Error::custom(err.to_string()))?;
-    Ok(precompiled_charsmap)
+    BASE64_STANDARD
+        .decode(s)
+        .map_err(|err| Error::custom(err.to_string()))
 }
 
 impl TryFrom<PrecompiledDeserializer> for Precompiled {
