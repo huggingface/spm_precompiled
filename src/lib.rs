@@ -8,7 +8,6 @@
 //! The core of the algorithm is to read spm's binary `precompiled_charsmap`.
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine as _;
-use nom::{number::complete::le_u32, IResult, ToUsize};
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 use std::convert::TryFrom;
 use unicode_segmentation::UnicodeSegmentation;
@@ -132,7 +131,7 @@ impl DoubleArray {
     }
 }
 
-fn parse(precompiled_charsmap: &[u8]) -> IResult<&[u8], Array> {
+fn parse(precompiled_charsmap: &[u8]) -> Result<(&[u8], Array), ()> {
     let (mut rest, trie_size) = le_u32(precompiled_charsmap)?;
     // u8 to u32.
     let trie_char_size = trie_size / 4;
@@ -144,6 +143,35 @@ fn parse(precompiled_charsmap: &[u8]) -> IResult<&[u8], Array> {
     }
     let normalized_blob = rest;
     Ok((normalized_blob, trie_blob))
+}
+
+// copied from nom
+fn le_u32(b: &[u8]) -> Result<(&[u8], u32), ()> {
+    let [x, y, z, v, rest @ ..] = b else {
+        return Err(());
+    };
+    Ok((rest, u32::from_le_bytes([*x, *y, *z, *v])))
+}
+
+// copied from nom
+trait ToUsize {
+    fn to_usize(&self) -> usize;
+}
+
+#[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+impl ToUsize for u32 {
+    #[inline]
+    fn to_usize(&self) -> usize {
+        *self as usize
+    }
+}
+
+#[cfg(target_pointer_width = "64")]
+impl ToUsize for u64 {
+    #[inline]
+    fn to_usize(&self) -> usize {
+        *self as usize
+    }
 }
 
 #[derive(Debug)]
