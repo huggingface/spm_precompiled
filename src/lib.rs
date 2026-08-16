@@ -11,7 +11,6 @@ use base64::Engine as _;
 use nom::{number::complete::le_u32, IResult, ToUsize};
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 use std::convert::TryFrom;
-use unicode_segmentation::UnicodeSegmentation;
 
 /// This struct is specifically done to be compatible with SentencePiece
 /// SentencePiece models embed their Normalizer within a `precompiled_charsmap`
@@ -130,6 +129,29 @@ impl DoubleArray {
         }
         results
     }
+
+    fn longest_prefix_search(&self, key: &[u8]) -> Option<(usize, isize)> {
+        let mut node_pos = 0;
+        let mut result = None;
+
+        let mut unit = self.array[node_pos];
+        node_pos ^= unit.offset();
+        for (index, c) in key.iter().enumerate() {
+            if *c == 0u8 {
+                break;
+            }
+            node_pos ^= *c as usize;
+            unit = self.array[node_pos];
+            if unit.label() != *c as usize {
+                break;
+            }
+            node_pos ^= unit.offset();
+            if unit.has_leaf() {
+                result = Some((index + 1, self.array[node_pos].value()));
+            }
+        }
+        result
+    }
 }
 
 fn parse(precompiled_charsmap: &[u8]) -> IResult<&[u8], Array> {
@@ -180,50 +202,40 @@ impl Precompiled {
         if results.is_empty() {
             None
         } else {
-            let index = results[0] as usize;
-            let mut index2 = index;
-            while index2 < self.normalized.len() {
-                if *self.normalized.as_bytes().get(index2)? == 0u8 {
-                    break;
-                }
-                index2 += 1;
-            }
-            let normalized = &self.normalized[index..index2];
-            Some(normalized)
+            self.normalized_at(results[0] as usize)
         }
+    }
+
+    /// Finds the longest matching prefix and returns its byte length and replacement.
+    pub fn transform_prefix(&self, chunk: &str) -> Option<(usize, &str)> {
+        let (length, index) = self.trie.longest_prefix_search(chunk.as_bytes())?;
+        Some((length, self.normalized_at(index as usize)?))
+    }
+
+    fn normalized_at(&self, index: usize) -> Option<&str> {
+        let mut index2 = index;
+        while index2 < self.normalized.len() {
+            if *self.normalized.as_bytes().get(index2)? == 0u8 {
+                break;
+            }
+            index2 += 1;
+        }
+        Some(&self.normalized[index..index2])
     }
 
     pub fn normalize_string(&self, original: &str) -> String {
         let mut string = String::with_capacity(original.len());
-        // Future reader. From @Narsil.
-        // Yes, this is weird,
-        // Yes, this seems broken
-        // No, I don't know why Google did this.
-        // If you question this code, check this normalizer against
-        // XNLI database (all languages) with Unigram model against
-        // Mbart, XLMRoberta *AND* Marian. If you don't get 100% or
-        // break a single test.
-        // You don't pass.
-        original.graphemes(true).for_each(|grapheme| {
-            if grapheme.len() < 6 {
-                if let Some(norm) = self.transform(grapheme) {
-                    for c in norm.chars() {
-                        string.push(c);
-                    }
-                    return;
-                }
+        let mut rest = original;
+        while !rest.is_empty() {
+            if let Some((length, normalized)) = self.transform_prefix(rest) {
+                string.push_str(normalized);
+                rest = &rest[length..];
+            } else {
+                let c = rest.chars().next().unwrap();
+                string.push(c);
+                rest = &rest[c.len_utf8()..];
             }
-            for (char_index, c) in grapheme.char_indices() {
-                let part = &grapheme[char_index..char_index + c.len_utf8()];
-                if let Some(norm) = self.transform(part) {
-                    for c in norm.chars() {
-                        string.push(c);
-                    }
-                } else {
-                    string.push(c);
-                }
-            }
-        });
+        }
         string
     }
 }

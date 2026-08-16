@@ -69,3 +69,36 @@ fn test_serialization() {
 fn nmt_nfkc() -> &'static [u8] {
     include_bytes!("./nmt_nfkc.bin")
 }
+
+fn overlapping_prefix_charsmap() -> Vec<u8> {
+    let mut trie = vec![0u32; 256];
+    trie[0] = 0;
+    trie[b'a' as usize] = b'a' as u32 | (1 << 8) | (1 << 10);
+    trie[96] = 0;
+    trie[2] = b'b' as u32 | (1 << 8) | (1 << 10);
+    trie[3] = 2;
+    trie[172] = 0xcc | (1 << 10);
+    trie[45] = 0x80 | (1 << 8) | (1 << 10);
+    trie[44] = 2;
+
+    let mut charsmap = Vec::with_capacity(4 + trie.len() * 4 + 4);
+    charsmap.extend_from_slice(&((trie.len() * 4) as u32).to_le_bytes());
+    for unit in trie {
+        charsmap.extend_from_slice(&unit.to_le_bytes());
+    }
+    charsmap.extend_from_slice(b"x\0y\0");
+    charsmap
+}
+
+#[test]
+fn test_normalize_string_uses_longest_prefix_match() {
+    let charsmap = overlapping_prefix_charsmap();
+    let precompiled = Precompiled::from(&charsmap).unwrap();
+
+    assert_eq!(precompiled.transform_prefix("abc"), Some((2, "y")));
+    assert_eq!(precompiled.transform_prefix("a\u{0300}z"), Some((3, "y")));
+    assert_eq!(precompiled.normalize_string("ab"), "y");
+    assert_eq!(precompiled.normalize_string("abc"), "yc");
+    assert_eq!(precompiled.normalize_string("a\u{0300}"), "y");
+    assert_eq!(precompiled.normalize_string("a\u{0300}z"), "yz");
+}
